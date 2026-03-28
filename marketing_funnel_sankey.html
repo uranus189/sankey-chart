@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Marketing Funnel Sankey</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: #f0f0f0;
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 20px;
+  }
+  #chart { width: 100%; max-width: 1100px; }
+  .node rect { cursor: pointer; transition: opacity 0.2s; }
+  .node rect:hover { opacity: 0.85; }
+  .node text { font-size: 11px; font-weight: 500; fill: #ccc; pointer-events: none; }
+  .link { fill: none; stroke-opacity: 0.25; transition: stroke-opacity 0.2s; }
+  .link:hover { stroke-opacity: 0.5; }
+  .tooltip {
+    position: absolute;
+    background: #1e2130;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #e0e0e0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
+  .tooltip .label { font-weight: 600; margin-bottom: 2px; }
+  .tooltip .val { color: #aaa; }
+</style>
+</head>
+<body>
+<h1>Marketing Funnel Flow</h1>
+<p class="subtitle">Lead journey from channel to outcome</p>
+<div id="chart"></div>
+<div class="tooltip" id="tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-sankey/0.12.3/d3-sankey.min.js"></script>
+<script>
+// --- CSV DATA EMBEDDED ---
+const csvData = `source,target,value
+Organic Search,Formfill,4500
+Paid Search,Formfill,3200
+Social,Formfill,1800
+Email,Formfill,2500
+Referral,Formfill,1200
+Formfill,INQ,10800
+Formfill,Dropped,2400
+INQ,Unique Lead,8600
+INQ,Dropped,2200
+Unique Lead,Contact,6800
+Unique Lead,Dropped,1800
+Contact,MQL,4200
+Contact,Dropped,2600
+MQL,Distributed,3000
+MQL,Dropped,1200
+Distributed,Stage 1 Pipeline,2100
+Distributed,Dropped,900
+Stage 1 Pipeline,Closed Won,800
+Stage 1 Pipeline,Closed Lost,1300`;
+
+// Parse CSV
+const rows = d3.csvParse(csvData);
+
+// Build nodes and links
+const nodeNames = new Set();
+rows.forEach(r => { nodeNames.add(r.source); nodeNames.add(r.target); });
+const nodeArray = Array.from(nodeNames);
+const nodes = nodeArray.map(name => ({ name }));
+const links = rows.map(r => ({
+  source: nodeArray.indexOf(r.source),
+  target: nodeArray.indexOf(r.target),
+  value: +r.value
+}));
+
+// Color scheme
+const colorMap = {
+  'Organic Search': '#4ade80',
+  'Paid Search': '#60a5fa',
+  'Social': '#f472b6',
+  'Email': '#facc15',
+  'Referral': '#c084fc',
+  'Formfill': '#38bdf8',
+  'INQ': '#2dd4bf',
+  'Unique Lead': '#34d399',
+  'Contact': '#a78bfa',
+  'MQL': '#fb923c',
+  'Distributed': '#f97316',
+  'Stage 1 Pipeline': '#e879f9',
+  'Closed Won': '#22c55e',
+  'Closed Lost': '#ef4444',
+  'Dropped': '#525252'
+};
+
+// Dimensions
+const margin = { top: 16, right: 160, bottom: 16, left: 16 };
+const width = 1100 - margin.left - margin.right;
+const height = 560 - margin.top - margin.bottom;
+
+const svg = d3.select('#chart')
+  .append('svg')
+  .attr('viewBox', `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+  .append('g')
+  .attr('transform', `translate(${margin.left},${margin.top})`);
+
+// Sankey generator
+const sankey = d3.sankey()
+  .nodeWidth(18)
+  .nodePadding(14)
+  .nodeAlign(d3.sankeyLeft)
+  .extent([[0, 0], [width, height]]);
+
+const graph = sankey({
+  nodes: nodes.map(d => ({ ...d })),
+  links: links.map(d => ({ ...d }))
+});
+
+// Tooltip
+const tooltip = d3.select('#tooltip');
+
+// Draw links
+svg.append('g')
+  .selectAll('.link')
+  .data(graph.links)
+  .join('path')
+  .attr('class', 'link')
+  .attr('d', d3.sankeyLinkHorizontal())
+  .attr('stroke', d => colorMap[d.source.name] || '#666')
+  .attr('stroke-width', d => Math.max(1, d.width))
+  .on('mouseover', (event, d) => {
+    tooltip.style('opacity', 1)
+      .html(`<div class="label">${d.source.name} → ${d.target.name}</div><div class="val">${d.value.toLocaleString()} leads</div>`);
+  })
+  .on('mousemove', (event) => {
+    tooltip.style('left', (event.pageX + 14) + 'px')
+      .style('top', (event.pageY - 20) + 'px');
+  })
+  .on('mouseout', () => tooltip.style('opacity', 0));
+
+// Draw nodes
+const node = svg.append('g')
+  .selectAll('.node')
+  .data(graph.nodes)
+  .join('g')
+  .attr('class', 'node');
+
+node.append('rect')
+  .attr('x', d => d.x0)
+  .attr('y', d => d.y0)
+  .attr('height', d => Math.max(1, d.y1 - d.y0))
+  .attr('width', d => d.x1 - d.x0)
+  .attr('fill', d => colorMap[d.name] || '#666')
+  .attr('rx', 3)
+  .on('mouseover', (event, d) => {
+    tooltip.style('opacity', 1)
+      .html(`<div class="label">${d.name}</div><div class="val">${d.value.toLocaleString()} leads</div>`);
+  })
+  .on('mousemove', (event) => {
+    tooltip.style('left', (event.pageX + 14) + 'px')
+      .style('top', (event.pageY - 20) + 'px');
+  })
+  .on('mouseout', () => tooltip.style('opacity', 0));
+
+// Labels
+node.append('text')
+  .attr('x', d => d.x1 + 8)
+  .attr('y', d => (d.y1 + d.y0) / 2)
+  .attr('dy', '0.35em')
+  .attr('text-anchor', 'start')
+  .text(d => `${d.name} (${d.value.toLocaleString()})`)
+  .filter(d => d.x0 < width / 2)
+  .attr('x', d => d.x1 + 8);
+
+</script>
+</body>
+</html>
