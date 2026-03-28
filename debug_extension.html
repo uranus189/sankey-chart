@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Debug</title></head>
+<body style="font-family:monospace;padding:20px;background:#111;color:#0f0;">
+<pre id="log">Starting debug...\n</pre>
+<script>
+var log = document.getElementById('log');
+function msg(t) { log.textContent += new Date().toISOString().substr(11,8) + ' ' + t + '\n'; }
+
+msg('Step 1: Page loaded');
+
+// Try loading the API script manually
+var script = document.createElement('script');
+script.src = 'https://extensions.tableausoftware.com/api/v1/tableau.extensions.1.latest.min.js';
+script.onload = function() {
+  msg('Step 2: Script loaded from CDN');
+  msg('typeof tableau = ' + typeof tableau);
+  msg('typeof tableau.extensions = ' + (typeof tableau !== 'undefined' ? typeof tableau.extensions : 'N/A'));
+
+  if (typeof tableau === 'undefined' || !tableau.extensions) {
+    msg('FAILED: tableau object not available after script load');
+    return;
+  }
+
+  msg('Step 3: Calling initializeAsync...');
+
+  try {
+    tableau.extensions.initializeAsync().then(function() {
+      msg('Step 4: initializeAsync SUCCESS');
+
+      var dashboard = tableau.extensions.dashboardContent.dashboard;
+      msg('Dashboard name: ' + dashboard.name);
+      msg('Worksheets: ' + dashboard.worksheets.length);
+
+      for (var i = 0; i < dashboard.worksheets.length; i++) {
+        msg('  Worksheet ' + i + ': ' + dashboard.worksheets[i].name);
+      }
+
+      if (dashboard.worksheets.length > 0) {
+        var ws = dashboard.worksheets[0];
+        msg('Step 5: Getting data from ' + ws.name + '...');
+
+        ws.getSummaryDataAsync().then(function(dt) {
+          msg('Step 6: Got data! Rows: ' + dt.data.length + ', Cols: ' + dt.columns.length);
+          for (var c = 0; c < dt.columns.length; c++) {
+            msg('  Col ' + c + ': ' + dt.columns[c].fieldName + ' (' + dt.columns[c].dataType + ')');
+          }
+          if (dt.data.length > 0) {
+            msg('First row:');
+            for (var j = 0; j < dt.columns.length; j++) {
+              msg('  ' + dt.columns[j].fieldName + ' = ' + dt.data[0][j].formattedValue);
+            }
+          }
+          msg('ALL STEPS PASSED - Extension API works!');
+        }).catch(function(e) {
+          msg('Step 6 FAILED: ' + e);
+        });
+      }
+    }).catch(function(e) {
+      msg('Step 4 FAILED: initializeAsync error: ' + e);
+    });
+  } catch(e) {
+    msg('Step 3 FAILED: exception: ' + e);
+  }
+};
+script.onerror = function(e) {
+  msg('Step 2 FAILED: Could not load script from CDN');
+  msg('Error: ' + JSON.stringify(e));
+};
+document.head.appendChild(script);
+msg('Script tag added, waiting for load...');
+</script>
+</body>
+</html>
